@@ -6,6 +6,11 @@ MCP server for transport.data.gouv.fr: datasets, GTFS resources, regions, networ
 
 Run the MCP and call `french_transport_data_get_sources` first to inspect source coverage. This server also exposes domain-specific tools for the topic described above.
 
+- `french_transport_data_search_datasets`
+- `french_transport_data_get_dataset`
+- `french_transport_data_list_dataset_resources`
+- `french_transport_data_search_data_gouv`
+
 ## Install
 
 ```bash

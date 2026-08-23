@@ -127,6 +127,42 @@ async function odsRecords(portalUrl: string, dataset: string, params: Record<str
   return fetchJson<Record<string, unknown>>(url.toString());
 }
 
+function summarizeTransportResource(resource: Record<string, unknown>) {
+  const metadata = resource.metadata && typeof resource.metadata === 'object'
+    ? resource.metadata as Record<string, unknown>
+    : {};
+  const stats = metadata.stats && typeof metadata.stats === 'object'
+    ? metadata.stats as Record<string, unknown>
+    : {};
+  return {
+    id: resource.id,
+    datagouv_id: resource.datagouv_id,
+    title: resource.title,
+    format: resource.format,
+    type: resource.type,
+    is_available: resource.is_available,
+    updated: resource.updated,
+    url: resource.url,
+    original_url: resource.original_url,
+    page_url: resource.page_url,
+    modes: resource.modes,
+    features: resource.features,
+    coverage_dates: {
+      start_date: metadata.start_date,
+      end_date: metadata.end_date,
+    },
+    quality_hints: {
+      validator_version: metadata.validator_version,
+      issues_count: metadata.issues_count,
+      routes_count: stats.routes_count,
+      stops_count: stats.stops_count ?? metadata.stops_count,
+      trips_count: stats.trips_count,
+      wheelchair_info_trips: stats.trips_with_wheelchair_info_count,
+      bike_info_trips: stats.trips_with_bike_info_count,
+    },
+  };
+}
+
 const server = new McpServer({ name: CONFIG.name, version: '0.1.0' });
 
 server.tool(
@@ -177,6 +213,29 @@ server.tool('french_transport_data_get_dataset', 'Fetch one transport.data.gouv.
 }, async ({ id }) => {
   try { return jsonResult({ id, dataset: await fetchJson<Record<string, unknown>>(`https://transport.data.gouv.fr/api/datasets/${encodeURIComponent(id)}`) }); }
   catch (error) { return errorResult(error instanceof Error ? error.message : 'Failed to fetch transport dataset'); }
+});
+
+server.tool('french_transport_data_list_dataset_resources', 'Extract GTFS, NeTEx, SIRI, and related resources from one transport.data.gouv.fr dataset with quality hints.', {
+  id: z.string().describe('Dataset id from french_transport_data_search_datasets.'),
+  format: z.string().optional().describe('Optional resource format filter, e.g. GTFS, NeTEx, SIRI.'),
+}, async ({ id, format }) => {
+  try {
+    const dataset = await fetchJson<Record<string, unknown>>(`https://transport.data.gouv.fr/api/datasets/${encodeURIComponent(id)}`);
+    const normalizedFormat = format?.toLowerCase();
+    const resources = Array.isArray(dataset.resources)
+      ? dataset.resources
+          .filter((resource) => !normalizedFormat || String(resource.format ?? '').toLowerCase() === normalizedFormat)
+          .map(summarizeTransportResource)
+      : [];
+    return jsonResult({
+      id,
+      title: dataset.title,
+      page_url: dataset.page_url,
+      publisher: dataset.publisher,
+      resource_count: resources.length,
+      resources,
+    });
+  } catch (error) { return errorResult(error instanceof Error ? error.message : 'Failed to list transport dataset resources'); }
 });
 
 server.tool('french_transport_data_search_data_gouv', 'Search data.gouv.fr for mobility datasets such as GTFS, NeTEx, SIRI, stops, and real-time feeds.', {
